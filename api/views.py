@@ -1,9 +1,14 @@
-from rest_framework import serializers
+from rest_framework import generics, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from .models import Post, Comment
-from .serializers import PostSerializer, UserCommentSerializer
+from .models import Post
+from django.contrib.auth.hashers import make_password
+from django.contrib.auth.models import User
+from .serializers import PostSerializer, UserCommentSerializer, UserSerializer, RegisterUserSerializer
+from django.contrib.auth import login
+from rest_framework.authtoken.serializers import AuthTokenSerializer
+from knox.views import LoginView as KnoxLoginView
 
 
 @api_view(['GET'])
@@ -16,6 +21,7 @@ def api_overview(request):
         'Update Existing Post By Id': '/update-post/<int:pk>',
         'Delete Existing Post By Id': '/delete-post/<int:pk>',
         'Get comments for each Post using post Id': '/comments/<int:pk>',
+        'Register User': '/register/',
     }
     return Response(api_urls)
 
@@ -73,3 +79,34 @@ def get_post_comments(request, pk):
     comments = post.comment.all()
     serializer = UserCommentSerializer(comments, many=True)
     return Response(serializer.data)
+
+
+
+# ----------------- User registration and login -------------#
+class RegisterUser(generics.GenericAPIView):
+    serializer_class = RegisterUserSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user_exists = User.objects.filter(
+            email=self.request.data['email']).first()
+        if user_exists:
+            return Response('User already exists')
+        else:
+            serializer.validated_data['password'] = make_password(serializer.validated_data['password'])
+            user = serializer.save()
+            return Response({
+                'user': UserSerializer(user, context=self.get_serializer_context()).data
+            })
+
+
+class LoginUser(KnoxLoginView):
+    permission_classes = (permissions.AllowAny,)
+
+    def post(self, request, format=None):
+        serializer = AuthTokenSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data['user']
+        login(request, user)
+        return super(LoginUser, self).post(request, format=None)
