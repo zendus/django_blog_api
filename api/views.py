@@ -2,7 +2,7 @@ from rest_framework import serializers
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from .models import Post, Comment
-from .serializers import PostSerializer
+from .serializers import PostSerializer, UserCommentSerializer
 
 
 @api_view(['GET'])
@@ -11,7 +11,10 @@ def api_overview(request):
         'Read All Posts': '/all-posts/',
         'Get Post By Id': '/all-posts/<int:pk>',
         'Get Post By Section': '/all-posts/<str:section>',
-        'Create New Post': '/create-post/'
+        'Create New Post': '/create-post/',
+        'Update Existing Post By Id': '/update-post/<int:pk>',
+        'Delete Existing Post By Id': '/delete-post/<int:pk>',
+        'Get comments for each Post using post Id': '/comments/<int:pk>',
     }
     return Response(api_urls)
 
@@ -39,3 +42,26 @@ def create_new_post(request):
     if serializer.is_valid():
         serializer.save()
     return Response('Post created successfully')
+
+@api_view(['POST', 'GET'])
+def update_post(request, pk):
+    post = Post.objects.get(id=pk)
+    if request.method == 'GET':
+        return Response(PostSerializer(post).data)
+    serializer = PostSerializer(instance=post, data=request.data)
+    if serializer.is_valid():
+        serializer.save()
+    return Response(serializer.data)
+
+@api_view(['DELETE'])
+def delete_post(request, pk):
+    post = Post.objects.get(id=pk)
+    post.delete()
+    return Response(f'Post with Id {pk} deleted')
+
+@api_view(['GET'])
+def get_post_comments(request, pk):
+    post = Post.objects.get(id=pk)
+    comments = post.comment.all()
+    serializer = UserCommentSerializer(comments, many=True)
+    return Response(serializer.data)
